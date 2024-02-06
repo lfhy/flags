@@ -4,6 +4,10 @@
 # Feature
 - 全局参数
 ```golang
+import (
+    "fmt"
+    "github.com/lfhy/flags"
+)
 var Port string
 var Socks bool
 flags.Var(&flags.Flag{Name:"port",Default:"123",&A},flags.Flag{Name:"ss",Default:"false",&B})
@@ -19,6 +23,10 @@ go run demo.go -port=233 hello -ss
 ```
 - 支持传入结构体构建
 ```golang
+import (
+    "fmt"
+    "github.com/lfhy/flags"
+)
 // 定义结构体
 type MyStruct struct{
     Port string `flag:"port" default:"1234"`
@@ -37,6 +45,10 @@ go run demo.go -port=233 -debug
 ```
 - 多种定义方式
 ```golang
+import (
+    "fmt"
+    "github.com/lfhy/flags"
+)
 var A,B string
 flags.Var(&flags.Flag{Name:"a",Default:"123",&A})
 flags.Flag{Name:"b",Default:"321",&B}.Var()
@@ -52,6 +64,10 @@ B:321
 ```
 - 支持导出kvargs
 ```golang
+import (
+    "fmt"
+    "github.com/lfhy/flags"
+)
 var Port string
 var Socks bool
 flags.Var(&flags.Flag{Name:"port",Default:"123",&A},flags.Flag{Name:"ss",Default:"false",&B})
@@ -68,3 +84,4 @@ go run demo.go -port=233 hello -ss
 - 兼容旧flag包函数
 - 支持从配置文件环境变量导入参数
 - 错误处理
+- 输出帮助信息

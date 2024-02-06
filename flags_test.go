@@ -1,7 +1,7 @@
 package flags_test
 
 import (
-	"flags"
+	"github.com/lfhy/flags"
 	"fmt"
 	"testing"
 )
