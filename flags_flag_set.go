@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
-	"strconv"
+	"sort"
 	"strings"
 )
 
@@ -14,6 +14,7 @@ type FlagSet struct {
 	all       map[string]*Flag
 	ok        map[string]*Flag
 	otherArgs []string
+	ishelp    bool
 }
 
 func NewFlags() *FlagSet {
@@ -22,94 +23,6 @@ func NewFlags() *FlagSet {
 	f.all = make(map[string]*Flag)
 	f.ok = make(map[string]*Flag)
 	return &f
-}
-
-type Flag struct {
-	Name    string
-	Type    string
-	Default string
-	Value   any
-}
-
-func (flag Flag) Var(f ...*FlagSet) {
-	if len(f) == 0 {
-		f = append(f, argsFlag)
-	}
-	for _, fs := range f {
-		fs.Var(&flag)
-	}
-}
-
-func (flag *Flag) errorInput(err any) error {
-	return fmt.Errorf("输入错误: %v", err)
-}
-
-func (flag *Flag) errorUnknowType(err any) error {
-	return fmt.Errorf("不支持的类型: %v", err)
-}
-
-func (flag *Flag) Parse(value string) error {
-	var (
-		reflectValue reflect.Value
-		reflectKind  reflect.Kind
-	)
-	if rv, ok := flag.Value.(reflect.Value); ok {
-		reflectValue = rv
-	} else {
-		reflectValue = reflect.ValueOf(flag.Value)
-	}
-	// 取出真实类型
-
-	for {
-		reflectKind = reflectValue.Kind()
-		switch reflectKind {
-		case reflect.Ptr:
-			if !reflectValue.IsValid() || reflectValue.IsNil() {
-				// 为空就创一个默认值出来
-				reflectValue = reflect.New(reflectValue.Type().Elem()).Elem()
-			} else {
-				reflectValue = reflectValue.Elem()
-			}
-		case reflect.Int:
-			data, err := strconv.Atoi(value)
-			if err != nil {
-				return flag.errorInput(err)
-			} else {
-				reflectValue.SetInt(int64(data))
-				return nil
-			}
-		case reflect.String:
-			reflectValue.SetString(value)
-			return nil
-		case reflect.Bool:
-			data, err := strconv.ParseBool(value)
-			if err != nil {
-				return flag.errorInput(err)
-			} else {
-				reflectValue.SetBool(data)
-				return nil
-			}
-		case reflect.Float64:
-			data, err := strconv.ParseFloat(value, 64)
-			if err != nil {
-				return flag.errorInput(err)
-			} else {
-				reflectValue.SetFloat(data)
-				return nil
-			}
-		case reflect.Uint:
-			data, err := strconv.ParseUint(value, 10, 64)
-			if err != nil {
-				return flag.errorInput(err)
-			} else {
-				reflectValue.SetUint(data)
-				return nil
-			}
-		default:
-			// 不支持的类型
-			return flag.errorUnknowType(reflectKind)
-		}
-	}
 }
 
 func (f *FlagSet) Var(flags ...any) {
@@ -148,6 +61,10 @@ func (f *FlagSet) Var(flags ...any) {
 						d, ok := value.Tag.Lookup("default")
 						if ok {
 							tmp.Default = d
+						}
+						dc, ok := value.Tag.Lookup("dc")
+						if ok {
+							tmp.Description = dc
 						}
 
 						tmp.Value = reflect.ValueOf(flag).Elem().Field(i)
@@ -189,6 +106,10 @@ func (f *FlagSet) Parse(args ...string) {
 			f.ok[key] = flag
 		}
 	}
+	if f.ishelp {
+		f.PrintUsage()
+		os.Exit(0)
+	}
 }
 
 func (f *FlagSet) Kvargs() map[string]string {
@@ -203,10 +124,14 @@ func (f *FlagSet) ParseToKV(args ...string) map[string]string {
 		f.args = args
 	}
 	// 清空旧的参数信息
+	f.ishelp = false
 	f.otherArgs = []string{}
 	f.kvargs = make(map[string]string)
 	for index, arg := range f.args {
 		if strings.HasPrefix(arg, "-") {
+			if arg == "-h" || arg == "--help" {
+				f.ishelp = true
+			}
 			// 判断是否有等号
 			argInfo := strings.Split(arg, "=")
 			if len(argInfo) >= 2 {
@@ -242,4 +167,27 @@ func (f *FlagSet) ParseToKV(args ...string) map[string]string {
 
 func (f *FlagSet) Args() []string {
 	return f.otherArgs
+}
+
+// 打印使用方法
+func (f *FlagSet) PrintUsage() {
+	fmt.Println("使用方法:")
+	if len(f.all) == 0 {
+		fmt.Printf("  暂无绑定参数\n")
+		return
+	}
+	// 排序列表
+	var flags []*Flag
+	for _, f2 := range f.all {
+		flags = append(flags, f2)
+	}
+	sort.Slice(flags, func(i, j int) bool {
+		return flags[i].Name < flags[j].Name
+	})
+
+	// 遍历列表打印使用方法
+	for _, flag := range flags {
+		// 打印使用方法
+		flag.PrintDefault()
+	}
 }
