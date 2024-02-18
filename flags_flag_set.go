@@ -18,17 +18,16 @@ type FlagSet struct {
 	ishelp    bool
 }
 
-type FlagFunc struct {
-	cmd func() error
-}
-
 type FlagSubCmd interface {
+	// 子命令名称
 	CmdName() string
+	// 子命令运行
 	CmdRun() error
 }
 
-func (ff *FlagFunc) Run() error {
-	return ff.cmd()
+type FlagSubMark interface {
+	// 子命令备注
+	CmdMark() string
 }
 
 func NewFlags() *FlagSet {
@@ -51,11 +50,21 @@ func (f *FlagSet) Var(flags ...any) {
 			// 判断是否有定义子命令
 			pfn, ok := flag.(*FlagSubCmd)
 			if ok {
-				f.AddSubCommand((*pfn).CmdName(), (*pfn).CmdRun)
+				mark, ok := flag.(*FlagSubMark)
+				if ok {
+					f.AddSubCommand((*pfn).CmdName(), (*pfn).CmdRun, (*mark).CmdMark())
+				} else {
+					f.AddSubCommand((*pfn).CmdName(), (*pfn).CmdRun)
+				}
 			} else {
 				pfn, ok := flag.(FlagSubCmd)
 				if ok {
-					f.AddSubCommand(pfn.CmdName(), pfn.CmdRun)
+					mark, ok := flag.(FlagSubMark)
+					if ok {
+						f.AddSubCommand(pfn.CmdName(), pfn.CmdRun, mark.CmdMark())
+					} else {
+						f.AddSubCommand(pfn.CmdName(), pfn.CmdRun)
+					}
 				}
 			}
 
@@ -197,11 +206,31 @@ func (f *FlagSet) Args() []string {
 
 // 打印使用方法
 func (f *FlagSet) PrintUsage() {
-	fmt.Println("使用方法:")
-	if len(f.all) == 0 {
+	fmt.Printf("使用方法\n\n")
+	if len(f.all) == 0 && len(f.subcmd) == 0 {
 		fmt.Printf("  暂无绑定参数\n")
 		return
 	}
+
+	// 打印子命令信息
+	var subCmd []*FlagFunc
+	for _, ff := range f.subcmd {
+		subCmd = append(subCmd, ff)
+	}
+	sort.Slice(subCmd, func(i, j int) bool {
+		return subCmd[i].name < subCmd[j].name
+	})
+
+	if len(subCmd) > 0 {
+		fmt.Println("子命令列表:")
+	}
+	for _, ff := range subCmd {
+		ff.PrintMark()
+	}
+	if len(subCmd) > 0 {
+		fmt.Println("")
+	}
+
 	// 排序列表
 	var flags []*Flag
 	for _, f2 := range f.all {
@@ -211,6 +240,10 @@ func (f *FlagSet) PrintUsage() {
 		return flags[i].Name < flags[j].Name
 	})
 
+	if len(flags) > 0 {
+		fmt.Println("参数列表:")
+	}
+
 	// 遍历列表打印使用方法
 	for _, flag := range flags {
 		// 打印使用方法
@@ -219,8 +252,13 @@ func (f *FlagSet) PrintUsage() {
 }
 
 // 添加子命令
-func (f *FlagSet) AddSubCommand(sub string, fn func() error) {
-	subCmd := FlagFunc{cmd: fn}
+func (f *FlagSet) AddSubCommand(sub string, fn func() error, dc ...string) {
+	subCmd := FlagFunc{cmd: fn, name: sub}
+	if len(dc) > 0 {
+		subCmd.dc = strings.Join(dc, ",")
+	} else {
+		subCmd.dc = fmt.Sprintf("运行 %v 子命令", sub)
+	}
 	f.subcmd[sub] = &subCmd
 }
 
