@@ -13,8 +13,22 @@ type FlagSet struct {
 	kvargs    map[string]string
 	all       map[string]*Flag
 	ok        map[string]*Flag
+	subcmd    map[string]*FlagFunc
 	otherArgs []string
 	ishelp    bool
+}
+
+type FlagFunc struct {
+	cmd func() error
+}
+
+type FlagSubCmd interface {
+	CmdName() string
+	CmdRun() error
+}
+
+func (ff *FlagFunc) Run() error {
+	return ff.cmd()
 }
 
 func NewFlags() *FlagSet {
@@ -22,6 +36,7 @@ func NewFlags() *FlagSet {
 	f.kvargs = make(map[string]string)
 	f.all = make(map[string]*Flag)
 	f.ok = make(map[string]*Flag)
+	f.subcmd = make(map[string]*FlagFunc)
 	return &f
 }
 
@@ -33,6 +48,17 @@ func (f *FlagSet) Var(flags ...any) {
 		case Flag:
 			f.all[flag.Name] = &flag
 		default:
+			// 判断是否有定义子命令
+			pfn, ok := flag.(*FlagSubCmd)
+			if ok {
+				f.AddSubCommand((*pfn).CmdName(), (*pfn).CmdRun)
+			} else {
+				pfn, ok := flag.(FlagSubCmd)
+				if ok {
+					f.AddSubCommand(pfn.CmdName(), pfn.CmdRun)
+				}
+			}
+
 			// 解析结构体
 			t := reflect.ValueOf(flag)
 			if t.Kind() == reflect.Ptr {
@@ -190,4 +216,33 @@ func (f *FlagSet) PrintUsage() {
 		// 打印使用方法
 		flag.PrintDefault()
 	}
+}
+
+// 添加子命令
+func (f *FlagSet) AddSubCommand(sub string, fn func() error) {
+	subCmd := FlagFunc{cmd: fn}
+	f.subcmd[sub] = &subCmd
+}
+
+// 解析并运行
+func (f *FlagSet) ParseToRun(args ...string) error {
+	f.Parse(args...)
+	return f.Run()
+}
+
+// 直接运行
+func (f *FlagSet) Run() error {
+	if len(f.otherArgs) > 0 {
+		fn := f.subcmd[f.otherArgs[0]]
+		if fn != nil {
+			return fn.Run()
+		}
+	}
+	if len(f.otherArgs) > 1 {
+		fn := f.subcmd[f.otherArgs[1]]
+		if fn != nil {
+			return fn.Run()
+		}
+	}
+	return fmt.Errorf("not sub command")
 }

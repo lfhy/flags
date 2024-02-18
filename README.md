@@ -80,6 +80,44 @@ go run demo.go -port=233 hello -ss
 参数集合为:map[-port:233 -ss:true]
 参数列表为:[hello]
 ```
+- 支持注册子命令并执行
+```golang
+package main
+
+import (
+	"fmt"
+
+	"github.com/lfhy/flags"
+)
+
+type Server struct {
+	Port string `flag:"port" default:"1234"`
+	IP   string `flag:"bind" default:"127.0.0.1"`
+}
+
+func (Server) CmdName() string {
+	return "server"
+}
+
+func (s *Server) CmdRun() error {
+	fmt.Printf("Server Listen:%v:%v\n", s.IP, s.Port)
+	return nil
+}
+
+func main() {
+	var server Server
+	flags.Var(&server)
+	err := flags.ParseToRun()
+	if err != nil {
+		panic(err)
+	}
+}
+```
+```sh
+go run demo.go -port=233 server -ss
+# 运行时候可以看到输出信息
+Server Listen:127.0.0.1:233
+```
 # TODO
 - 兼容旧flag包函数
 - 支持从配置文件环境变量导入参数

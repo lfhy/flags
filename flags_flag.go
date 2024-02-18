@@ -113,5 +113,4 @@ func (flag *Flag) PrintDefault() {
 			fmt.Printf("\n")
 		}
 	}
-
 }

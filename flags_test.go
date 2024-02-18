@@ -1,10 +1,26 @@
 package flags_test
 
 import (
-	"github.com/lfhy/flags"
 	"fmt"
 	"testing"
+
+	"github.com/lfhy/flags"
 )
+
+type Struct struct {
+	A string `flag:"sa" default:"321"`
+	B int    `flag:"sb" default:"321"`
+	C bool   `flag:"sc" default:"true"`
+}
+
+func (Struct) CmdName() string {
+	return "aaa"
+}
+
+func (s *Struct) CmdRun() error {
+	fmt.Println("Hello!")
+	return nil
+}
 
 func TestParse(t *testing.T) {
 	args := []string{
@@ -26,11 +42,7 @@ func TestParse(t *testing.T) {
 	var e myString
 	var f int
 	var g string
-	type Struct struct {
-		A string `flag:"sa" default:"321"`
-		B int    `flag:"sb" default:"321"`
-		C bool   `flag:"sc" default:"true"`
-	}
+
 	var h Struct
 	flags.Flag{
 		Name:    "a",
@@ -70,6 +82,10 @@ func TestParse(t *testing.T) {
 		},
 		&h,
 	)
+	flags.AddSubCommand("bbb", func() error {
+		fmt.Println("Hello bbb!")
+		return nil
+	})
 	flags.Parse(args...)
 	fmt.Printf("a: %v\n", a)
 	fmt.Printf("b: %v\n", b)
@@ -83,4 +99,5 @@ func TestParse(t *testing.T) {
 	fmt.Printf("res: %+v\n", kvargs)
 	fargs := flags.Args()
 	fmt.Printf("args: %v\n", fargs)
+	flags.Run()
 }

@@ -31,3 +31,18 @@ func Var(fg ...any) {
 func PrintUsage() {
 	argsFlag.PrintUsage()
 }
+
+// 添加子命令
+func AddSubCommand(sub string, fn func() error) {
+	argsFlag.AddSubCommand(sub, fn)
+}
+
+// 解析并运行
+func ParseToRun(args ...string) error {
+	return argsFlag.ParseToRun(args...)
+}
+
+// 直接运行
+func Run() error {
+	return argsFlag.Run()
+}
