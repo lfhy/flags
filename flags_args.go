@@ -33,8 +33,11 @@ func PrintUsage() {
 }
 
 // 添加子命令
-func AddSubCommand(sub string, fn func() error) {
-	argsFlag.AddSubCommand(sub, fn)
+func AddSubCommand(sub string, initfn func(...string) error, runfn func() error) {
+	var fn subFunc
+	fn.initfn = initfn
+	fn.runfn = runfn
+	argsFlag.AddSubCommand(sub, &fn)
 }
 
 // 解析并运行

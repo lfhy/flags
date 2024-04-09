@@ -11,8 +11,8 @@ import (
 type FlagSet struct {
 	args      []string
 	kvargs    map[string]string
-	all       map[string]*Flag
-	ok        map[string]*Flag
+	all       map[string][]*Flag
+	ok        map[string][]*Flag
 	subcmd    map[string]*FlagFunc
 	otherArgs []string
 	ishelp    bool
@@ -25,6 +25,15 @@ type FlagSubCmd interface {
 	CmdRun() error
 }
 
+type FlagSubInit interface {
+	// 子命令备注
+	CmdInit(...string) error
+}
+
+func defaultInit(_ ...string) error {
+	return nil
+}
+
 type FlagSubMark interface {
 	// 子命令备注
 	CmdMark() string
@@ -33,37 +42,67 @@ type FlagSubMark interface {
 func NewFlags() *FlagSet {
 	var f FlagSet
 	f.kvargs = make(map[string]string)
-	f.all = make(map[string]*Flag)
-	f.ok = make(map[string]*Flag)
+	f.all = make(map[string][]*Flag)
+	f.ok = make(map[string][]*Flag)
 	f.subcmd = make(map[string]*FlagFunc)
 	return &f
+}
+
+func (f *FlagSet) appendToAll(name string, flag *Flag) {
+	if f.all[name] == nil {
+		f.all[name] = make([]*Flag, 0)
+	}
+	f.all[name] = append(f.all[name], flag)
+}
+
+func (f *FlagSet) appendToOK(name string, flag *Flag) {
+	if f.ok[name] == nil {
+		f.ok[name] = make([]*Flag, 0)
+	}
+	f.ok[name] = append(f.ok[name], flag)
 }
 
 func (f *FlagSet) Var(flags ...any) {
 	for _, f2 := range flags {
 		switch flag := f2.(type) {
 		case *Flag:
-			f.all[flag.Name] = flag
+			f.appendToAll(flag.Name, flag)
 		case Flag:
-			f.all[flag.Name] = &flag
+			f.appendToAll(flag.Name, &flag)
 		default:
 			// 判断是否有定义子命令
 			pfn, ok := flag.(*FlagSubCmd)
 			if ok {
+				var fn subFunc
+				fn.runfn = (*pfn).CmdRun
+				initfn, ok := flag.(*FlagSubInit)
+				if ok {
+					fn.initfn = (*initfn).CmdInit
+				} else {
+					fn.initfn = defaultInit
+				}
 				mark, ok := flag.(*FlagSubMark)
 				if ok {
-					f.AddSubCommand((*pfn).CmdName(), (*pfn).CmdRun, (*mark).CmdMark())
+					f.AddSubCommand((*pfn).CmdName(), &fn, (*mark).CmdMark())
 				} else {
-					f.AddSubCommand((*pfn).CmdName(), (*pfn).CmdRun)
+					f.AddSubCommand((*pfn).CmdName(), &fn)
 				}
 			} else {
 				pfn, ok := flag.(FlagSubCmd)
 				if ok {
+					var fn subFunc
+					fn.runfn = pfn.CmdRun
+					initfn, ok := flag.(FlagSubInit)
+					if ok {
+						fn.initfn = initfn.CmdInit
+					} else {
+						fn.initfn = defaultInit
+					}
 					mark, ok := flag.(FlagSubMark)
 					if ok {
-						f.AddSubCommand(pfn.CmdName(), pfn.CmdRun, mark.CmdMark())
+						f.AddSubCommand(pfn.CmdName(), &fn, mark.CmdMark())
 					} else {
-						f.AddSubCommand(pfn.CmdName(), pfn.CmdRun)
+						f.AddSubCommand(pfn.CmdName(), &fn)
 					}
 				}
 			}
@@ -103,7 +142,7 @@ func (f *FlagSet) Var(flags ...any) {
 						}
 
 						tmp.Value = reflect.ValueOf(flag).Elem().Field(i)
-						f.all[v] = &tmp
+						f.appendToAll(v, &tmp)
 					}
 				}
 			}
@@ -121,24 +160,29 @@ func (f *FlagSet) Parse(args ...string) {
 	}
 	argsMap := f.ParseToKV()
 	// 获取有效的值
-	for key, flag := range f.all {
+	for key, flags := range f.all {
 		value, ok := argsMap["-"+key]
 		if ok {
-			err := flag.Parse(value)
-			if err == nil {
-				f.ok[key] = flag
+			for _, flag := range flags {
+				err := flag.Parse(value)
+				if err == nil {
+					f.appendToOK(key, flag)
+				}
 			}
+
 		}
 	}
 	// 获取默认值
-	for key, flag := range f.all {
+	for key, flags := range f.all {
 		_, ok := f.ok[key]
 		if ok {
 			continue
 		}
-		err := flag.Parse(flag.Default)
-		if err == nil {
-			f.ok[key] = flag
+		for _, flag := range flags {
+			err := flag.Parse(flag.Default)
+			if err == nil {
+				f.appendToOK(key, flag)
+			}
 		}
 	}
 	if f.ishelp {
@@ -234,7 +278,7 @@ func (f *FlagSet) PrintUsage() {
 	// 排序列表
 	var flags []*Flag
 	for _, f2 := range f.all {
-		flags = append(flags, f2)
+		flags = append(flags, f2...)
 	}
 	sort.Slice(flags, func(i, j int) bool {
 		return flags[i].Name < flags[j].Name
@@ -251,9 +295,14 @@ func (f *FlagSet) PrintUsage() {
 	}
 }
 
+type subFunc struct {
+	initfn func(...string) error
+	runfn  func() error
+}
+
 // 添加子命令
-func (f *FlagSet) AddSubCommand(sub string, fn func() error, dc ...string) {
-	subCmd := FlagFunc{cmd: fn, name: sub}
+func (f *FlagSet) AddSubCommand(sub string, fn *subFunc, dc ...string) {
+	subCmd := FlagFunc{initfunc: fn.initfn, cmd: fn.runfn, name: sub}
 	if len(dc) > 0 {
 		subCmd.dc = strings.Join(dc, ",")
 	} else {
@@ -273,13 +322,13 @@ func (f *FlagSet) Run() error {
 	if len(f.otherArgs) > 0 {
 		fn := f.subcmd[f.otherArgs[0]]
 		if fn != nil {
-			return fn.Run()
+			return fn.Run(f.otherArgs...)
 		}
 	}
 	if len(f.otherArgs) > 1 {
 		fn := f.subcmd[f.otherArgs[1]]
 		if fn != nil {
-			return fn.Run()
+			return fn.Run(f.otherArgs...)
 		}
 	}
 	return fmt.Errorf("not sub command")

@@ -41,6 +41,7 @@ func TestParse(t *testing.T) {
 	var d string
 	var e myString
 	var f int
+	var f2 string
 	var g string
 
 	var h Struct
@@ -80,9 +81,16 @@ func TestParse(t *testing.T) {
 			Default: "233",
 			Value:   &g,
 		},
+		flags.Flag{
+			Name:    "31",
+			Default: "233",
+			Value:   &f2,
+		},
 		&h,
 	)
-	flags.AddSubCommand("bbb", func() error {
+	flags.AddSubCommand("bbb", func(s ...string) error {
+		return nil
+	}, func() error {
 		fmt.Println("Hello bbb!")
 		return nil
 	})
@@ -93,6 +101,7 @@ func TestParse(t *testing.T) {
 	fmt.Printf("d: %v\n", d)
 	fmt.Printf("e: %v\n", e)
 	fmt.Printf("f: %v\n", f)
+	fmt.Printf("f2: %v\n", f2)
 	fmt.Printf("g: %v\n", g)
 	fmt.Printf("h: %+v\n", h)
 	kvargs := flags.Kvargs()

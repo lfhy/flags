@@ -16,6 +16,11 @@ var config Config
 type Server struct {
 }
 
+func (Server) CmdInit(args ...string) error {
+	fmt.Println("运行参数:", args)
+	return nil
+}
+
 func (Server) CmdName() string {
 	return "server"
 }
