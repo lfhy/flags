@@ -32,12 +32,22 @@ func PrintUsage() {
 	argsFlag.PrintUsage()
 }
 
+// 设置帮助函数
+func SetHelpFunc(fn func()) {
+	argsFlag.SetHelpFunc(fn)
+}
+
+// 设置帮助输出打印全局参数列表
+func SetHelpPrintArgsList(isPrint bool) {
+	argsFlag.SetHelpPrintArgsList(isPrint)
+}
+
 // 添加子命令
-func AddSubCommand(sub string, initfn func(...string) error, runfn func() error) {
+func AddSubCommand(sub string, initfn func(...string) error, runfn func() error, alias ...string) {
 	var fn subFunc
 	fn.initfn = initfn
 	fn.runfn = runfn
-	argsFlag.AddSubCommand(sub, &fn)
+	argsFlag.AddSubCommand(sub, alias, &fn)
 }
 
 // 解析并运行

@@ -14,6 +14,7 @@ type Config struct {
 var config Config
 
 type Server struct {
+	ServerName string `flag:"server" default:"server"`
 }
 
 func (Server) CmdInit(args ...string) error {
@@ -31,6 +32,7 @@ func (Server) CmdRun() error {
 }
 
 type Client struct {
+	ClientName string `flag:"client" default:"client"`
 }
 
 func (Client) CmdName() string {
@@ -48,6 +50,6 @@ func main() {
 	flags.Var(&config, &server, &client)
 	err := flags.ParseToRun()
 	if err != nil {
-		panic(err)
+		flags.PrintUsage()
 	}
 }

@@ -110,3 +110,16 @@ func TestParse(t *testing.T) {
 	fmt.Printf("args: %v\n", fargs)
 	flags.Run()
 }
+
+// 打印帮助信息
+func TestPrintHelp(t *testing.T) {
+	var h Struct
+	flags.Var(&h)
+	flags.PrintUsage()
+
+	fn := func() {
+		fmt.Println("自定义使用方法")
+	}
+	flags.SetHelpFunc(fn)
+	flags.PrintUsage()
+}
